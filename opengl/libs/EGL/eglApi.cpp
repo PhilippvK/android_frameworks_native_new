@@ -14,6 +14,8 @@
  ** limitations under the License.
  */
 
+// TEST
+
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
 
 #include <dlfcn.h>
