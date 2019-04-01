@@ -56,6 +56,12 @@
 #include "egl_tls.h"
 #include "egldefs.h"
 
+//------------OWN INCLUDES---------------
+#include <sys/ioctl.h>
+#include "../../../../../kernel/hardkernel/odroidxu3/include/dominiksgov/cpufreq_dominiksgov_eglapi.h"i
+#include "../../../../../kernel/hardkernel/odroidxu3/include/dominiksgov/eglAPI_GOV.h"
+//---------------------------
+
 using namespace android;
 
 // This extension has not been ratified yet, so can't be shipped.
@@ -1157,10 +1163,270 @@ EGLBoolean eglSwapBuffersWithDamageKHR(EGLDisplay dpy, EGLSurface draw,
     }
 }
 
-EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
+EGLBoolean eglSwapBuffers_func(EGLDisplay dpy, EGLSurface surface)
 {
     return eglSwapBuffersWithDamageKHR(dpy, surface, NULL, 0);
 }
+
+//---------------------------------------OWN-CODE-------------------------------------------
+
+//String Hash -> converts  String to unique uint
+unsigned int str2int(const char* str, int h = 0) 
+{
+    return !str[h] ? 5381 : (str2int(str, h+1)*33) ^ str[h];
+}
+
+//get processname by reading file from /proc filesystem
+const char* get_process_name_by_pid(const int pid){
+    char* name = (char*)calloc(1024,sizeof(char));
+    if(name){
+        sprintf(name, "/proc/%d/cmdline",pid);
+        FILE* f = fopen(name,"r");
+        if(f){
+            size_t size;
+            size = fread(name, sizeof(char), 1024, f);
+            if(size>0){
+                if('\n'==name[size-1])
+                    name[size-1]='\0';
+            }
+            fclose(f);
+        }
+    }
+    return name;
+}
+
+//calculate the difference in ns between two timespecs: out = stop - start
+uint64_t diff_time(timespec start, timespec stop){
+    uint64_t out;
+    out=((uint64_t)stop.tv_sec*(uint64_t)1.0e9+(uint64_t)stop.tv_nsec)-((uint64_t)start.tv_sec*(uint64_t)1.0e9+(uint64_t)start.tv_nsec);
+    return out;    
+}
+
+// ==-1 if governor is not active
+int gov_active;
+
+void *new_frame_thread(void *in) {
+    //timespec time_start, time_stop;
+    //clock_gettime(CLOCK_MONOTONIC, &time_start);
+
+    //struct to be passed by ioctl
+    ioctl_struct_new_frame ioctl_struct;
+
+    //get sleep_time from input argument
+    ioctl_struct.sleep_time=*((uint64_t *)in);
+          
+    //time_stamp wich is passed by ioctl
+    timespec time_stamp;
+    clock_gettime(CLOCK_MONOTONIC, &time_stamp);
+    ioctl_struct.time=(uint64_t)time_stamp.tv_sec*(uint64_t)1.0e9+(uint64_t)time_stamp.tv_nsec;
+    
+    //open device driver file
+    int fd = open(FILENAME, O_RDWR);
+        if (fd == -1){
+            //LOGE("can't open device file!\n");
+        }
+    else {
+            //ioctl cmd to governor
+            if (ioctl(fd, IOCTL_CMD_NEW_FRAME, &ioctl_struct) == -1){
+            LOGE("ioctl-call error\n");
+        }
+
+    }
+
+    //if device driver exists -> governor is active
+    gov_active=fd;
+    close(fd);
+
+    //clock_gettime(CLOCK_MONOTONIC, &time_stop);
+    //LOGI("TIME NEEDED FOR THREAD: %llu", diff_time(time_start, time_stop));
+
+    pthread_exit(NULL);
+    return NULL;
+}
+
+bool is_init = false;
+
+/*
+int get_nr_games(FILE* file_in){
+    int nr_lines=0;
+    //FILE* f_in=file_in;
+    while ( fgets (NULL , 100 , file_in) != NULL && nr_lines<999){    
+        nr_lines ++;
+    }
+    return nr_lines;
+}*/
+
+
+//new eglSwapBuffers function ->is called every time the screen is updated
+EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
+    timespec time_start, time_stop;
+    static timespec time_buff;
+    clock_gettime(CLOCK_MONOTONIC, &time_start);
+    double frame_rate, diffT;
+    static timespec time_stamp;
+    EGLBoolean ret;
+    short game_detected=1;
+    const char* name;
+    uint64_t time_frame, time_target;
+    int PID;
+    static uint64_t sleep_time;
+     static uint64_t sleep_time_buff;
+    static unsigned int * game_list;
+    static int nr_games=0;
+
+    //call original eglSwapBuffers function
+    ret=eglSwapBuffers_func(dpy, draw);
+
+    //read config file
+    if (!is_init){
+        FILE* game_config_file;
+        game_config_file=fopen(CONFIG_PATH, "r");    
+        //Open config file
+        if (game_config_file == NULL){
+            LOGE("Can't open config file! PATH: %s, Error: %s", CONFIG_PATH, strerror(errno));
+        }
+        else{
+            //LOGI("Config file opened succesfull!");
+            //nr_games=get_nr_games(game_config_file);
+            int nr_lines=0;
+            char buff[100];
+            //count lines in config file to determine number of games
+            while ( fgets (buff , 100 , game_config_file) != NULL && nr_lines<999){    
+                nr_lines ++;
+            }
+            nr_games=nr_lines;
+
+            //LOGI("Nr. games in config file: %i", nr_games);
+            fclose(game_config_file);
+            //reopen config file to get the file pointer at the beginning of the file
+            game_config_file=fopen(CONFIG_PATH, "r"); 
+            if (game_config_file == NULL){
+                LOGE("Can't open config file!");
+            }    
+            else {
+                game_list=new unsigned int [nr_games];
+                nr_lines=0;
+                //LOGI("Config file opened 2 times succesfull!");
+                //read every line of the file and convert it to uint
+                while ( fgets (buff , 100 , game_config_file) != NULL && nr_lines<999){    
+                    game_list[nr_lines]=atoll(buff);
+                    //LOGI("Game ID-Nr.: %i, %u", nr_lines, game_list[nr_lines]);
+                    nr_lines ++;    
+                }
+                fclose(game_config_file);
+                is_init=true;
+                }
+            }    
+    }
+     
+    //get PID and Name of calling task
+    PID=getpid();
+    name=get_process_name_by_pid(PID);
+
+    //uncommand to get stringhashes of new games
+    //LOGI("Hash for %s : %u \n", name, str2int(name));
+
+    //check if callin task is a game
+    game_detected=0;
+    unsigned int game_ID=str2int(name);
+    //iterate throug game IDs and compare to ID of callig thread    
+    for (int a=0; a<nr_games; a++){
+        //LOGI("Game ID-Nr.: %i, %u", a, game_list[a]);
+        if(game_ID==game_list[a]){
+            game_detected=1;
+            break;
+        }
+    }
+    
+    /*if(game_detected==1){
+        LOGI("%s is a game", name);
+    }
+    else{
+        LOGI("%s is NOT a game", name);
+    }*/
+
+    /*switch (str2int(name)){
+        case(sonic_racing):
+        case(sonic_jump):
+        case(fruit_ninja):
+        case (gta_hash):
+        case (dragon_fly_hash): 
+        case (gladiator_hash):
+        case (star_wars_hash): 
+        case (asphalt8_hash): 
+
+        case (real_racing_hash): 
+        case (dungeon_hunter_hash): 
+        case (overkill_hash): 
+        case (stickman_hash): 
+
+        case (angry_birds_star_wars): 
+        case (deer_hunter): 
+        case (i_gladiator): 
+        case (real_steal): 
+        case (bike_racing): 
+        case (interstellar): 
+        case (angry_birds_go): 
+            break;
+        
+        default:
+            game_detected=0;
+            break;
+    }*/
+
+    //calculate time of last frame
+    time_frame=diff_time(time_buff, time_start);
+    
+    //if calling task is a game
+    if(game_detected==1){
+        pthread_t T_thread;
+        sleep_time_buff=sleep_time;
+
+        //create independant thread for ioctl
+        if(pthread_create( &T_thread, NULL, new_frame_thread, &sleep_time_buff)) {
+            LOGI("Log Thread could not be created");
+        }
+        else{
+            pthread_detach(T_thread);
+        }
+
+
+        //clock_gettime(CLOCK_MONOTONIC, &time_stop);
+        //LOGI("TIME NEEDED FOR MAIN FUNCTION: %llu", diff_time(time_start, time_stop));
+        
+        //if governor is active
+        /*if (gov_active != -1){
+            time_target=1e9/TARGET_FRAME_RATE;
+            if(time_frame < time_target){        
+                sleep_time=((time_target - time_frame) / 1e3); //if frame rate > target frame rate -> sleep (in usecs)
+                if(sleep_time*1e3 < time_target){
+                    sleep_time = 0; // FOR TEST: NO SLEEP TIME!!!!!!!!!!!!!!!
+                    LOGE("Sleep for: %llu", sleep_time);
+                    usleep(sleep_time);
+                }
+            }
+            else {
+                sleep_time=0;
+            }                
+        } */
+        
+        //uncommand to display frame rate
+        //LOGI("FRAME_RATE: %f", 1e9/time_frame );
+        
+        //clock_gettime(CLOCK_MONOTONIC, &time_buff);
+        
+        //save time_start for use in next call of function
+        time_buff=time_start;
+
+        LOGLOG("%f, %llu", 1e9/time_frame, sleep_time);
+    }
+
+    
+    //call original eglSwapBuffers function
+    //ret=eglSwapBuffers_func(dpy, draw);
+    return ret;
+}
+//--------------------------------------------------------------------------------------------
 
 EGLBoolean eglCopyBuffers(  EGLDisplay dpy, EGLSurface surface,
                             NativePixmapType target)
