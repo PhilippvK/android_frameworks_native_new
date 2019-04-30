@@ -58,8 +58,8 @@
 
 //------------OWN INCLUDES---------------
 #include <sys/ioctl.h>
-#include "../../../../../kernel/hardkernel/odroidxu3/include/dominiksgov/cpufreq_dominiksgov_eglapi.h"i
-#include "../../../../../kernel/hardkernel/odroidxu3/include/dominiksgov/eglAPI_GOV.h"
+#include "EGL/cpufreq_dominiksgov_eglapi.h"
+#include "EGL/eglAPI_GOV.h"
 //---------------------------
 
 using namespace android;
@@ -1223,7 +1223,7 @@ void *new_frame_thread(void *in) {
     //open device driver file
     int fd = open(FILENAME, O_RDWR);
         if (fd == -1){
-            //LOGE("can't open device file!\n");
+            LOGE("can't open device file!\n");
         }
     else {
             //ioctl cmd to governor
