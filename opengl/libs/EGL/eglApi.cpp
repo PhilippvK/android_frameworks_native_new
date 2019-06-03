@@ -1345,35 +1345,6 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
         LOGI("%s is NOT a game", name);
     }*/
 
-    /*switch (str2int(name)){
-        case(sonic_racing):
-        case(sonic_jump):
-        case(fruit_ninja):
-        case (gta_hash):
-        case (dragon_fly_hash): 
-        case (gladiator_hash):
-        case (star_wars_hash): 
-        case (asphalt8_hash): 
-
-        case (real_racing_hash): 
-        case (dungeon_hunter_hash): 
-        case (overkill_hash): 
-        case (stickman_hash): 
-
-        case (angry_birds_star_wars): 
-        case (deer_hunter): 
-        case (i_gladiator): 
-        case (real_steal): 
-        case (bike_racing): 
-        case (interstellar): 
-        case (angry_birds_go): 
-            break;
-        
-        default:
-            game_detected=0;
-            break;
-    }*/
-
     //calculate time of last frame
     time_frame=diff_time(time_buff, time_start);
     
