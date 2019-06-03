@@ -1353,20 +1353,20 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
         //LOGI("TIME NEEDED FOR MAIN FUNCTION: %llu", diff_time(time_start, time_stop));
         
         //if governor is active
-        /*if (gov_active != -1){
+        if (gov_active != -1){
             time_target=1e9/TARGET_FRAME_RATE;
             if(time_frame < time_target){        
                 sleep_time=((time_target - time_frame) / 1e3); //if frame rate > target frame rate -> sleep (in usecs)
                 if(sleep_time*1e3 < time_target){
                     sleep_time = 0; // FOR TEST: NO SLEEP TIME!!!!!!!!!!!!!!!
-                    LOGE("Sleep for: %llu", sleep_time);
+                    //LOGE("Sleep for: %llu", sleep_time);
                     usleep(sleep_time);
                 }
             }
             else {
                 sleep_time=0;
             }                
-        } */
+        }
         
         //uncommand to display frame rate
         //LOGI("FRAME_RATE: %f", 1e9/time_frame );
