@@ -14,8 +14,6 @@
  ** limitations under the License.
  */
 
-// TEST
-
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
 
 #include <dlfcn.h>
@@ -1199,7 +1197,7 @@ const char* get_process_name_by_pid(const int pid){
 uint64_t diff_time(timespec start, timespec stop){
     uint64_t out;
     out=((uint64_t)stop.tv_sec*(uint64_t)1.0e9+(uint64_t)stop.tv_nsec)-((uint64_t)start.tv_sec*(uint64_t)1.0e9+(uint64_t)start.tv_nsec);
-    return out;    
+    return out;
 }
 
 // ==-1 if governor is not active
@@ -1246,17 +1244,6 @@ void *new_frame_thread(void *in) {
 
 bool is_init = false;
 
-/*
-int get_nr_games(FILE* file_in){
-    int nr_lines=0;
-    //FILE* f_in=file_in;
-    while ( fgets (NULL , 100 , file_in) != NULL && nr_lines<999){    
-        nr_lines ++;
-    }
-    return nr_lines;
-}*/
-
-
 //new eglSwapBuffers function ->is called every time the screen is updated
 EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
     timespec time_start, time_stop;
@@ -1270,7 +1257,7 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
     uint64_t time_frame, time_target;
     int PID;
     static uint64_t sleep_time;
-     static uint64_t sleep_time_buff;
+    static uint64_t sleep_time_buff;
     static unsigned int * game_list;
     static int nr_games=0;
 
@@ -1326,7 +1313,7 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
     //uncommand to get stringhashes of new games
     //LOGI("Hash for %s : %u \n", name, str2int(name));
 
-    //check if callin task is a game
+    //check if calling task is a game
     game_detected=0;
     unsigned int game_ID=str2int(name);
     //iterate throug game IDs and compare to ID of callig thread    
