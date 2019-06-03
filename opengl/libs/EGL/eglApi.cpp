@@ -1270,11 +1270,11 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
         game_config_file=fopen(CONFIG_PATH, "r");    
         //Open config file
         if (game_config_file == NULL){
-            LOGE("Can't open config file! PATH: %s, Error: %s", CONFIG_PATH, strerror(errno));
+            //LOGE("Can't open config file! PATH: %s, Error: %s", CONFIG_PATH, strerror(errno));
+            // Do not spam Logs when another governor is active
         }
         else{
             //LOGI("Config file opened succesfull!");
-            //nr_games=get_nr_games(game_config_file);
             int nr_lines=0;
             char buff[100];
             //count lines in config file to determine number of games
