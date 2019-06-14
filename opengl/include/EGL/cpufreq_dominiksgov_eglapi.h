@@ -10,5 +10,7 @@ typedef struct{
 }ioctl_struct_new_frame;
 
 #define TARGET_FRAME_RATE 30
+#define LIMIT_FPS
+//#define BENCHMARKING
 
 #endif
