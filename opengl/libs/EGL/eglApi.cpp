@@ -1231,9 +1231,11 @@ void *new_frame_thread(void *in) {
         }
     else {
             //ioctl cmd to governor
-            if (ioctl(fd, IOCTL_CMD_NEW_FRAME, &ioctl_struct) == -1){
+        if (ioctl(fd, IOCTL_CMD_NEW_FRAME, ioctl_struct) == -1){
                LOGE("ioctl-call error\n");
         }
+            // TODO: comment out ioctl call and compare timing with interactive
+            // try out commenting out open as well
 
     }
 
@@ -1245,7 +1247,7 @@ void *new_frame_thread(void *in) {
 
     #ifdef BENCHMARKING
     clock_gettime(CLOCK_MONOTONIC, &time_stop);
-    LOGI("TIME NEEDED FOR THREAD: %llu", diff_time(time_start, time_stop));
+    LOGI("TIME THREAD: %llu", diff_time(time_start, time_stop));
     #endif // BENCHMARKING 
 
     pthread_exit(NULL);
@@ -1256,7 +1258,7 @@ bool is_init = false;
 
 //new eglSwapBuffers function ->is called every time the screen is updated
 EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
-    timespec time_start, time_stop, time_bench;
+    timespec time_start, time_stop, time_bench, time_stop2;
     static timespec time_buff, time_buff_corrected, time_last;
     double frame_rate, diffT;
     static timespec time_stamp;
@@ -1290,7 +1292,7 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
             // Do not spam Logs when another governor is active
         }
         else{
-            //LOGI("Config file opened succesfull!");
+            LOGI("Config file opened succesfull!");
             int nr_lines=0;
             char buff[100];
             //count lines in config file to determine number of games
@@ -1327,7 +1329,7 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
     name=get_process_name_by_pid(PID);
 
     //uncommand to get stringhashes of new games
-    //LOGI("Hash for %s : %u \n", name, str2int(name));
+    //LOGI("Hash for %s[%d] : %u \n", name, PID,  str2int(name));
 
     //check if calling task is a game
     game_detected=0;
