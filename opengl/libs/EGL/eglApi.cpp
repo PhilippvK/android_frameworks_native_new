@@ -1218,18 +1218,10 @@ void *new_frame_thread(void *in) {
     #ifdef BENCHMARKING
     timespec time_start, time_stop;
     clock_gettime(CLOCK_MONOTONIC, &time_start);
-    #endif // BENCHMARKING 
+    #endif // BENCHMARKING
 
     //struct to be passed by ioctl
-    ioctl_struct_new_frame ioctl_struct;
-
-    //get sleep_time from input argument
-    ioctl_struct.sleep_time=*((uint64_t *)in);
-          
-    //time_stamp wich is passed by ioctl
-    timespec time_stamp;
-    clock_gettime(CLOCK_MONOTONIC, &time_stamp);
-    ioctl_struct.time=(uint64_t)time_stamp.tv_sec*(uint64_t)1.0e9+(uint64_t)time_stamp.tv_nsec;
+    ioctl_struct_new_frame *ioctl_struct = (ioctl_struct_new_frame *) in;
     
     //open device driver file
     int fd = open(FILENAME, O_RDWR);
@@ -1248,6 +1240,8 @@ void *new_frame_thread(void *in) {
     //if device driver exists -> governor is active
     gov_active=fd;
     close(fd);
+
+    free (ioctl_struct); // free up memory when done
 
     #ifdef BENCHMARKING
     clock_gettime(CLOCK_MONOTONIC, &time_stop);
@@ -1269,18 +1263,22 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
     EGLBoolean ret;
     short game_detected=1;
     const char* name;
-    uint64_t time_frame, time_target, time_target_tol;
+    uint64_t time_frame;
     int PID;
     static uint64_t sleep_time;
     static uint64_t sleep_time_buff;
     static unsigned int * game_list;
     static int nr_games=0;
+    #ifdef LIMIT_FPS
+    static uint64_t time_target=1e9/(TARGET_FRAME_RATE);
+    static uint64_t time_target_tol=1e9/(TARGET_FRAME_RATE+3);
+    #endif // LIMIT_FPS
 
     #ifdef BENCHMARKING
     clock_gettime(CLOCK_MONOTONIC, &time_bench);
     #endif // BENCHMARKING 
     //call original eglSwapBuffers function
-    //ret=eglSwapBuffers_func(dpy, draw);
+    ret=eglSwapBuffers_func(dpy, draw);
 
     //read config file
     if (!is_init){
@@ -1343,20 +1341,17 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
         }
     }
     
-    /*if(game_detected==1){
-        LOGI("%s is a game", name);
-    }
-    else{
-        LOGI("%s is NOT a game", name);
-    }*/
+    #ifdef BENCHMARKING
+    clock_gettime(CLOCK_MONOTONIC, &time_stop);
+    LOGI("TIME MAIN1: %llu", diff_time(time_bench, time_stop));
+    #endif // BENCHMARKING
 
-    //calculate time of last frame
-    clock_gettime(CLOCK_MONOTONIC, &time_start);
-    time_frame=diff_time(time_buff, time_start);
-    //time_last=time_start;
-    
     //if calling task is a game
     if(game_detected==1){
+        clock_gettime(CLOCK_MONOTONIC, &time_start);
+        time_frame=diff_time(time_last, time_start);
+        //time_frame=diff_time(time_buff, time_start);
+
         pthread_t T_thread;
 
 #ifdef PRIORITIES // only for testing purposes
@@ -1373,8 +1368,13 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
         }
 #endif // PRIORITIES
 
+        // Prepare thread arguments
+        ioctl_struct_new_frame *args = (ioctl_struct_new_frame*) malloc (sizeof (ioctl_struct_new_frame));
+        args->sleep_time = sleep_time;
+        args->time = (uint64_t)time_start.tv_sec*(uint64_t)1.0e9+(uint64_t)time_start.tv_nsec;;
+
         //create independant thread for ioctl
-        if(pthread_create( &T_thread, NULL, new_frame_thread, &sleep_time_buff)) {
+        if(pthread_create( &T_thread, NULL, new_frame_thread, args)) {
             LOGI("Log Thread could not be created");
         }
         else{
@@ -1393,23 +1393,17 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
         #endif // PIDLOG
 
         #ifdef BENCHMARKING
-        clock_gettime(CLOCK_MONOTONIC, &time_stop);
-        LOGI("TIME NEEDED FOR MAIN FUNCTION: %llu", diff_time(time_bench, time_stop));
+        clock_gettime(CLOCK_MONOTONIC, &time_stop2);
+        LOGI("TIME MAIN2: %llu", diff_time(time_stop, time_stop2));
         #endif // BENCHMARKING 
         
         #ifdef LIMIT_FPS
         //if governor is active
         if (gov_active != -1){
-            time_target=1e9/(TARGET_FRAME_RATE);
-            time_target_tol=1e9/(TARGET_FRAME_RATE+3);
             if(time_frame < time_target_tol){
-                // TODO: debug fps > 100 and handle them properly!
                 sleep_time=((time_target - time_frame) / 1e3); //if frame rate > target frame rate+3 -> sleep (in usecs)
                 if(sleep_time*1e3 < time_target){
-                    //sleep_time = 0; // FOR TEST: NO SLEEP TIME!!!!!!!!!!!!!!!
-                    //LOGE("Sleep for: %llu", sleep_time);
-                    //usleep(sleep_time);
-                    usleep(sleep_time*97/100); // TEST only
+                    usleep(sleep_time*97/100);
                 } else {
                     sleep_time=0;
                 }
@@ -1420,22 +1414,19 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
         }
         #endif // LIMIT_FPS
         
-        //uncommand to display frame rate
-        //LOGI("FRAME_RATE: %f", 1e9/time_frame );
-        
         clock_gettime(CLOCK_MONOTONIC, &time_buff_corrected);
-        LOGLOG("%f, %llu, %f, %llu", 1e9/diff_time(time_buff, time_buff_corrected), sleep_time,1e9/time_frame,
-                (uint64_t)time_buff_corrected.tv_sec*(uint64_t)1.0e9+(uint64_t)time_buff_corrected.tv_nsec);
+        //LOGLOG("%f, %f, %f, %llu", 1e9/diff_time(time_buff, time_buff_corrected), 1e9/time_frame, 1e9/diff_time(time_last, time_start), (uint64_t)time_buff_corrected.tv_sec*(uint64_t)1.0e9+(uint64_t)time_buff_corrected.tv_nsec);
+        //LOGLOG("%f, %llu, %f, %llu, %f", 1e9/diff_time(time_buff, time_buff_corrected), sleep_time, 1e9/diff_time(time_last, time_start), (uint64_t)time_buff_corrected.tv_sec*(uint64_t)1.0e9+(uint64_t)time_buff_corrected.tv_nsec, 1e9/time_frame);
+        LOGLOG("%f, %llu, %f, %llu, %f", 1e9/diff_time(time_last, time_start), sleep_time, 1e9/diff_time(time_buff, time_buff_corrected), (uint64_t)time_buff_corrected.tv_sec*(uint64_t)1.0e9+(uint64_t)time_buff_corrected.tv_nsec, 1e9/time_frame);
         time_buff=time_buff_corrected;
         
         //save time_start for use in next call of function
         //time_buff=time_start;
-
+        time_last=time_start;
     }
-
     
     //call original eglSwapBuffers function
-    ret=eglSwapBuffers_func(dpy, draw);
+    //ret=eglSwapBuffers_func(dpy, draw);
     return ret;
 }
 //--------------------------------------------------------------------------------------------
