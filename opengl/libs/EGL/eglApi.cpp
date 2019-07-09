@@ -58,6 +58,17 @@
 #include <sys/ioctl.h>
 #include "EGL/cpufreq_dominiksgov_eglapi.h"
 #include "EGL/eglAPI_GOV.h"
+
+//--PIDLOG--
+#ifdef PIDLOG
+#include "EGL/ThreadLogger.h"
+#endif // PIDLOG
+
+//--PRIORITIES--
+#ifdef PRIORITIES
+#include <sys/syscall.h>
+#include <sys/resource.h>
+#endif // PRIORITIES
 //---------------------------
 
 using namespace android;
@@ -1347,7 +1358,20 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
     //if calling task is a game
     if(game_detected==1){
         pthread_t T_thread;
-        sleep_time_buff=sleep_time;
+
+#ifdef PRIORITIES // only for testing purposes
+        int which = PRIO_PROCESS;
+        int priority = -20;
+        int ret2;
+        ret2 = getpriority(which, 0);
+        LOGI("prio before (0): %d",ret2);
+        ret2 = getpriority(which, PID);
+        LOGI("prio before (PID: %d",ret2);
+        ret2 = setpriority(which, 0, priority);
+        if (ret2) {
+            LOGI("ERROR: prio");
+        }
+#endif // PRIORITIES
 
         //create independant thread for ioctl
         if(pthread_create( &T_thread, NULL, new_frame_thread, &sleep_time_buff)) {
@@ -1357,6 +1381,16 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw){
             pthread_detach(T_thread);
         }
 
+        #ifdef PIDLOG
+        pthread_t T_thread2;
+        //create independant thread for pidlogger
+        if(pthread_create( &T_thread2, NULL, thread_log, NULL)) {
+            LOGI("PID Log Thread could not be created");
+        }
+        else{
+            pthread_detach(T_thread2);
+        }
+        #endif // PIDLOG
 
         #ifdef BENCHMARKING
         clock_gettime(CLOCK_MONOTONIC, &time_stop);

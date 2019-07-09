@@ -12,5 +12,7 @@ typedef struct{
 #define TARGET_FRAME_RATE 30
 #define LIMIT_FPS
 //#define BENCHMARKING
+//#define PIDLOG
+//#define PRIORITIES
 
 #endif
