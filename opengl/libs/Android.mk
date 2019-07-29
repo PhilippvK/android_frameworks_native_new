@@ -29,6 +29,7 @@ LOCAL_SRC_FILES:= 	       \
 	EGL/eglApi.cpp 	       \
 	EGL/getProcAddress.cpp.arm \
 	EGL/Loader.cpp 	       \
+	EGL/ThreadLogger.cpp   \ # only for testing
 #
 
 LOCAL_SHARED_LIBRARIES += libbinder libcutils libutils liblog libui
